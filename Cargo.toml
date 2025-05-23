@@ -1,0 +1,23 @@
+[package]
+name = "exodus"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tim Hofman <tim.hofman25@gmail.com>"]
+description = "A minimalistic, CPU-efficient code editor"
+
+[dependencies]
+egui = "0.24"
+eframe = { version = "0.24", default-features = false, features = ["default_fonts", "glow"] }
+winapi = { version = "0.3", features = ["winuser", "windef"] }
+syntect = "5.1"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+dirs = "5.0"
+rfd = "0.14"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
