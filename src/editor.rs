@@ -6,6 +6,7 @@ pub struct Editor {
     tabs: Vec<EditorTab>,
     active_tab: usize,
     next_id: usize,
+    workspace_folder: Option<PathBuf>,
 }
 
 pub struct EditorTab {
@@ -20,14 +21,14 @@ pub struct EditorTab {
     search_highlights: Vec<(usize, usize)>,
 }
 
-impl Editor {
-    pub fn new() -> Self {
+impl Editor {    pub fn new() -> Self {
         let mut editor = Self {
             tabs: Vec::new(),
             active_tab: 0,
             next_id: 0,
+            workspace_folder: None,
         };
-        editor.new_file(); // Start with one empty file
+        editor.new_file();
         editor
     }
 
@@ -71,6 +72,15 @@ impl Editor {
             self.tabs.push(tab);
             self.active_tab = self.tabs.len() - 1;
             self.next_id += 1;
+        }
+    }
+
+    pub fn close_file(&mut self) {
+        if self.tabs.len() > 1 {
+            self.tabs.remove(self.active_tab);
+            if self.active_tab >= self.tabs.len() {
+                self.active_tab = self.tabs.len() - 1;
+            }
         }
     }
 
@@ -198,5 +208,11 @@ impl Editor {
                 self.active_tab -= 1;
             }
         }
+    }    pub fn open_folder(&mut self, folder_path: PathBuf) {
+        self.workspace_folder = Some(folder_path);
+    }
+
+    pub fn get_workspace_folder(&self) -> Option<&PathBuf> {
+        self.workspace_folder.as_ref()
     }
 }

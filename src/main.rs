@@ -41,7 +41,6 @@ impl Exodus {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let config = Config::load().unwrap_or_default();
         
-        // Configure egui style for minimalist appearance
         let mut style = (*cc.egui_ctx.style()).clone();
         style.visuals.window_rounding = egui::Rounding::ZERO;
         style.visuals.menu_rounding = egui::Rounding::ZERO;
@@ -65,17 +64,23 @@ impl Exodus {
         TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("New").clicked() {
+                    if ui.button("New File").clicked() {
                         self.editor.new_file();
                         ui.close_menu();
                     }
-                    if ui.button("Open").clicked() {
+                    if ui.button("Open File").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
                             self.editor.open_file(path);
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Save").clicked() {
+                    if ui.button("Open Folder").clicked(){
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                            self.editor.open_folder(path);
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Save File").clicked() {
                         self.editor.save_current();
                         ui.close_menu();
                     }
@@ -139,38 +144,96 @@ impl Exodus {
                     ui.heading("Files");
                     ui.separator();
                     
-                    if let Ok(current_dir) = std::env::current_dir() {
-                        self.show_directory_tree(ui, &current_dir, 0);
-                    }
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .max_width(f32::INFINITY)
+                        .show(ui, |ui| {
+                            ui.set_min_width(200.0);
+                            
+                            if let Some(workspace_folder) = self.editor.get_workspace_folder().cloned() {
+                                if let Some(folder_name) = workspace_folder.file_name().and_then(|n| n.to_str()) {
+                                    ui.label(format!("📁 {}", folder_name));
+                                    ui.separator();
+                                }
+                                self.show_directory_tree(ui, &workspace_folder, 0);
+                            } else {
+                                ui.label("No folder opened");
+                                ui.separator();
+                                if ui.button("Open Folder").clicked() {
+                                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                        self.editor.open_folder(path);
+                                    }
+                                }
+                            }
+                        });
                 });
         }
     }
 
     fn show_directory_tree(&mut self, ui: &mut egui::Ui, path: &PathBuf, depth: usize) {
-        if depth > 3 { return; } // Limit recursion depth
+        if depth > 5 { return; }
         
         if let Ok(entries) = fs::read_dir(path) {
-            for entry in entries.flatten() {
+            let mut entries: Vec<_> = entries.flatten().collect();
+            
+            entries.sort_by(|a, b| {
+                let a_is_dir = a.path().is_dir();
+                let b_is_dir = b.path().is_dir();
+                
+                match (a_is_dir, b_is_dir) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => a.file_name().cmp(&b.file_name()),
+                }
+            });
+            
+            for entry in entries {
                 let entry_path = entry.path();
                 let name = entry_path.file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("?");
                 
-                if name.starts_with('.') { continue; }
-                
-                let indent = "  ".repeat(depth);
-                
-                if entry_path.is_dir() {
-                    if ui.collapsing(format!("{}{} 📁", indent, name), |ui| {
-                        self.show_directory_tree(ui, &entry_path, depth + 1);
-                    }).header_response.clicked() {
-                        // Handle directory click
-                    }
-                } else {
-                    if ui.button(format!("{}📄 {}", indent, name)).clicked() {
-                        self.editor.open_file(entry_path);
-                    }
+                if name.starts_with('.') || 
+                   name == "target" || 
+                   name == "node_modules" || 
+                   name == "__pycache__" ||
+                   name == ".git" {
+                    continue;
                 }
+                
+                ui.horizontal(|ui| {
+                    ui.add_space(depth as f32 * 16.0);
+                    
+                    if entry_path.is_dir() {
+                        let dir_path = entry_path.clone();
+                        let response = ui.collapsing(format!("📁 {}", name), |ui| {
+                            self.show_directory_tree(ui, &dir_path, depth + 1);
+                        });
+                        
+                        if response.header_response.double_clicked() {
+                            // Double-click to expand/collapse
+                        }
+                    } else {
+                        let icon = match entry_path.extension().and_then(|e| e.to_str()) {
+                            Some("rs") => "🦀",
+                            Some("py") => "🐍",
+                            Some("js") | Some("ts") => "📜",
+                            Some("html") => "🌐",
+                            Some("css") => "🎨",
+                            Some("json") => "📋",
+                            Some("md") => "📝",
+                            Some("toml") | Some("yaml") | Some("yml") => "⚙️",
+                            Some("txt") => "📄",
+                            _ => "📄",
+                        };
+                        
+                        let file_path = entry_path.clone();
+                        let button_text = format!("{} {}", icon, name);
+                        if ui.add(egui::Button::new(button_text).wrap(false)).clicked() {
+                            self.editor.open_file(file_path);
+                        }
+                    }
+                });
             }
         }
     }
