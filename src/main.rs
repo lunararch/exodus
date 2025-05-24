@@ -125,6 +125,17 @@ impl Exodus {
                     if response.changed() {
                         self.editor.highlight_search(&self.search_query);
                     }
+                    
+                    // Show match count
+                    if !self.search_query.is_empty() {
+                        let match_count = self.editor.get_search_match_count();
+                        ui.label(format!("({} matches)", match_count));
+                    }
+                    
+                    if ui.button("Next").clicked() && !self.search_query.is_empty() {
+                        self.editor.find_next(&self.search_query);
+                    }
+                    
                     if ui.button("×").clicked() {
                         self.show_search = false;
                         self.search_query.clear();
@@ -250,6 +261,10 @@ impl App for Exodus {
                     if let Some(path) = rfd::FileDialog::new().pick_file() {
                         self.editor.open_file(path);
                     }
+                } else if i.key_pressed(egui::Key::K){
+                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                        self.editor.open_folder(path);
+                    }
                 } else if i.key_pressed(egui::Key::S) {
                     self.editor.save_current();
                 } else if i.key_pressed(egui::Key::Z) {
@@ -258,7 +273,30 @@ impl App for Exodus {
                     self.editor.redo();
                 } else if i.key_pressed(egui::Key::F) {
                     self.show_search = !self.show_search;
+                    if !self.show_search {
+                        self.search_query.clear();
+                        self.editor.clear_search_highlights();
+                    }
+                } else if i.key_pressed(egui::Key::B) {
+                    self.show_file_explorer = !self.show_file_explorer;
+                } else if i.key_pressed(egui::Key::G) {
+                    // Find next
+                    if !self.search_query.is_empty() {
+                        self.editor.find_next(&self.search_query);
+                    }
                 }
+            }
+            
+            // Escape to close search
+            if i.key_pressed(egui::Key::Escape) && self.show_search {
+                self.show_search = false;
+                self.search_query.clear();
+                self.editor.clear_search_highlights();
+            }
+            
+            // Enter to find next in search
+            if i.key_pressed(egui::Key::Enter) && self.show_search && !self.search_query.is_empty() {
+                self.editor.find_next(&self.search_query);
             }
         });
 
